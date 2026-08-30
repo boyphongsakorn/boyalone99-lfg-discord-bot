@@ -150,15 +150,21 @@ function renderLfgStreamHtml(players = getLiveLfgPlayers()) {
         justify-content: space-between;
         gap: 8px;
         margin-bottom: 8px;
+        min-width: 0;
       }
 
       .name {
+        flex: 1 1 auto;
+        min-width: 0;
         font-size: 28px;
         font-weight: 700;
         color: var(--text);
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       .status {
+        flex-shrink: 0;
         font-size: 13px;
         font-weight: 700;
         color: var(--success);
