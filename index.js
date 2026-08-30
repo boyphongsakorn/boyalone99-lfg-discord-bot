@@ -397,6 +397,28 @@ async function handleCreateVoiceButton(interaction) {
   await interaction.showModal(modal);
 }
 
+async function getLfgMentionPayload(guild) {
+  if (!guild) {
+    return {
+      content: '@everyone',
+      allowedMentions: { parse: ['everyone'] },
+    };
+  }
+
+  const role = await guild.roles.fetch(LFG_ROLE_ID).catch(() => null);
+  if (role && role.members.size > 0) {
+    return {
+      content: `<@&${LFG_ROLE_ID}>`,
+      allowedMentions: { roles: [LFG_ROLE_ID] },
+    };
+  }
+
+  return {
+    content: '@everyone',
+    allowedMentions: { parse: ['everyone'] },
+  };
+}
+
 async function handleCreateVoiceModalSubmit(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
@@ -407,7 +429,6 @@ async function handleCreateVoiceModalSubmit(interaction) {
 
   const categoryId = process.env.VOICE_CATEGORY_ID || '1543002292033421312';
   const category = categoryId ? await guild.channels.fetch(categoryId).catch(() => null) : null;
-
   const displayName = member.displayName || interaction.user.username;
   const channelName = `🎮 ${gameName} - ${displayName}`.slice(0, 100);
 
@@ -448,10 +469,12 @@ async function handleCreateVoiceModalSubmit(interaction) {
       )
       .setTimestamp();
 
+    const mentionPayload = await getLfgMentionPayload(guild);
+
     const lfgMessage = await lfgChannel.send({
-      content: `<@&${LFG_ROLE_ID}>`,
+      content: mentionPayload.content,
       embeds: [embed],
-      allowedMentions: { roles: [LFG_ROLE_ID] },
+      allowedMentions: mentionPayload.allowedMentions,
     }).catch(() => null);
 
     if (lfgMessage) {
