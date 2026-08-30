@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fastify = require('fastify')({ logger: false });
 const {
   Client,
   GatewayIntentBits,
@@ -23,8 +24,189 @@ const client = new Client({
 
 const LFG_CHANNEL_ID = process.env.LFG_POST_CHANNEL_ID || '1543200807334322176';
 const LFG_ROLE_ID = process.env.LFG_ROLE_ID || '1543368029063217193';
+const LFG_STREAM_PORT = Number(process.env.LFG_STREAM_PORT || 3000);
 const tempVoiceChannels = new Set();
 const voiceRoomAnnouncementMessages = new Map();
+const activeLfgRooms = new Map();
+
+function getLiveLfgPlayers() {
+  return Array.from(activeLfgRooms.values())
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((room) => ({
+      name: room.creator,
+      game: room.game,
+      note: room.description || 'No description',
+      status: 'Looking for group',
+    }));
+}
+
+function renderLfgStreamHtml(players = getLiveLfgPlayers()) {
+  const cards = players
+    .map(
+      (player) => `
+        <div class="player-box">
+          <div class="game-tag">${player.game}</div>
+          <div class="player-header">
+            <span class="name">${player.name}</span>
+            <span class="status">${player.status}</span>
+          </div>
+          <div class="note">${player.note}</div>
+        </div>`
+    )
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LFG Stream Overlay</title>
+    <style>
+      :root {
+        --bg: rgba(15, 16, 26, 0.78);
+        --panel: rgba(29, 33, 54, 0.9);
+        --border: rgba(124, 140, 255, 0.9);
+        --accent: #7dd3fc;
+        --accent-2: #c084fc;
+        --text: #eef2ff;
+        --muted: #cbd5e1;
+        --success: #4ade80;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .stream-frame {
+        width: 1920px;
+        height: 300px;
+        background: linear-gradient(135deg, rgba(17, 24, 39, 0.88), rgba(30, 41, 59, 0.9));
+        border: 2px solid rgba(255,255,255,0.08);
+        border-radius: 18px;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .title {
+        margin: 0 0 12px 0;
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        color: var(--text);
+        text-transform: uppercase;
+      }
+
+      .row {
+        display: flex;
+        gap: 18px;
+        align-items: stretch;
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow: hidden;
+      }
+
+      .player-box {
+        min-width: 300px;
+        max-width: 340px;
+        flex: 1 1 0;
+        background: var(--panel);
+        border: 2px solid var(--border);
+        border-radius: 14px;
+        padding: 12px 14px;
+        box-shadow: inset 0 0 0 1px rgba(165,180,252,0.28);
+      }
+
+      .game-tag {
+        display: inline-block;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: #0f172a;
+        font-weight: 800;
+        font-size: 18px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        margin-bottom: 10px;
+      }
+
+      .player-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .name {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .status {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--success);
+        background: rgba(74, 222, 128, 0.1);
+        border: 1px solid rgba(74, 222, 128, 0.35);
+        border-radius: 999px;
+        padding: 4px 8px;
+        white-space: nowrap;
+      }
+
+      .note {
+        font-size: 18px;
+        color: var(--muted);
+        line-height: 1.4;
+        word-wrap: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stream-frame">
+      <h1 class="title">Looking for Group</h1>
+      <div class="row">
+        ${cards}
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+fastify.get('/stream/lfg', async (request, reply) => {
+  const rawPlayers = request.query.players;
+  const players = Array.isArray(rawPlayers)
+    ? rawPlayers.map((player) => JSON.parse(player))
+    : rawPlayers
+      ? [JSON.parse(rawPlayers)]
+      : getLiveLfgPlayers();
+
+  reply.type('text/html');
+  return renderLfgStreamHtml(players);
+});
+
+fastify.listen({ port: LFG_STREAM_PORT, host: '0.0.0.0' })
+  .then(() => {
+    console.log(`LFG stream overlay is running at http://localhost:${LFG_STREAM_PORT}/stream/lfg`);
+  })
+  .catch((error) => {
+    console.error('Failed to start LFG stream overlay server:', error);
+  });
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -235,6 +417,13 @@ async function handleCreateVoiceModalSubmit(interaction) {
   });
 
   tempVoiceChannels.add(voiceChannel.id);
+  activeLfgRooms.set(voiceChannel.id, {
+    id: voiceChannel.id,
+    game: gameName,
+    creator: interaction.user.username,
+    description: description || 'No description',
+    createdAt: Date.now(),
+  });
 
   if (member.voice.channel) {
     await member.voice.setChannel(voiceChannel).catch(() => {});
@@ -287,6 +476,7 @@ client.on('voiceStateUpdate', async (oldState) => {
 
   if (channel.members.size === 0) {
     tempVoiceChannels.delete(channel.id);
+    activeLfgRooms.delete(channel.id);
     await deleteVoiceRoomAnnouncement(channel.id);
     await channel.delete('LFG voice room empty').catch(() => {});
   }
@@ -297,6 +487,7 @@ client.on('channelDelete', async (channel) => {
   if (!tempVoiceChannels.has(channel.id) && !voiceRoomAnnouncementMessages.has(channel.id)) return;
 
   tempVoiceChannels.delete(channel.id);
+  activeLfgRooms.delete(channel.id);
   await deleteVoiceRoomAnnouncement(channel.id);
 });
 
