@@ -36,7 +36,7 @@ function getLiveLfgPlayers() {
       name: room.creator,
       game: room.game,
       note: room.description || 'No description',
-      status: 'Looking for group',
+      status: 'มองหาคนเล่นด้วย',
     }));
 }
 
@@ -185,7 +185,7 @@ function renderLfgStreamHtml(players = getLiveLfgPlayers()) {
   </head>
   <body>
     <div class="stream-frame">
-      <h1 class="title">Looking for Group</h1>
+      <h1 class="title">ผู้คนกำลังมองหาทีม (เข้าร่วม !discord)</h1>
       <div class="row">
         ${cards}
       </div>
