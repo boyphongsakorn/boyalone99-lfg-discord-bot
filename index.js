@@ -408,7 +408,8 @@ async function handleCreateVoiceModalSubmit(interaction) {
   const categoryId = process.env.VOICE_CATEGORY_ID || '1543002292033421312';
   const category = categoryId ? await guild.channels.fetch(categoryId).catch(() => null) : null;
 
-  const channelName = `🎮 ${gameName} - ${interaction.user.username}`.slice(0, 100);
+  const displayName = member.displayName || interaction.user.username;
+  const channelName = `🎮 ${gameName} - ${displayName}`.slice(0, 100);
 
   const voiceChannel = await guild.channels.create({
     name: channelName,
@@ -426,7 +427,7 @@ async function handleCreateVoiceModalSubmit(interaction) {
   activeLfgRooms.set(voiceChannel.id, {
     id: voiceChannel.id,
     game: gameName,
-    creator: interaction.user.username,
+    creator: displayName,
     description: description || 'No description',
     createdAt: Date.now(),
   });
