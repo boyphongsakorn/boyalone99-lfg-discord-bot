@@ -288,7 +288,7 @@ async function postLfgEmbed() {
     .setColor(0x5865f2)
     .setTitle('หาเพื่อนเล่นเกม (LFG)')
     // .setDescription('Choose a game below to create a voice room or grab the LFG role for updates.')
-    .setDescription('กดปุ่มด้านล่างเพื่อสร้างห้องเสียงสำหรับเกมที่คุณต้องการเล่น หรือรับ Role LFG เพื่อรับการแจ้งเตือนเมื่อเวลามีคนหาเพื่อนเล่นด้วย')
+    .setDescription('กดปุ่มด้านล่างเพื่อสร้างห้องเสียงสำหรับเกมที่คุณต้องการหาเพื่อนเล่น \nหรือรับ Role LFG เพื่อรับการแจ้งเตือนเมื่อเวลามีคนหาเพื่อนเล่นด้วย')
     .setTimestamp();
 
   const warframeButton = new ButtonBuilder()
