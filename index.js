@@ -74,6 +74,64 @@ async function markVoiceChatGone(vcId) {
   );
 }
 
+function parseLfgVoiceChannelName(channelName) {
+  if (!channelName) {
+    return { game: 'Game', creator: 'Unknown' };
+  }
+
+  const separator = ' - ';
+  const index = channelName.lastIndexOf(separator);
+
+  if (index === -1) {
+    return { game: channelName.replace(/^\s*[\W_]+\s*/, '').trim() || 'Game', creator: 'Unknown' };
+  }
+
+  const gamePart = channelName.slice(0, index).trim();
+  const creatorPart = channelName.slice(index + separator.length).trim();
+
+  const game = gamePart.replace(/^\s*[\W_]+\s*/, '').trim() || 'Game';
+  const creator = creatorPart || 'Unknown';
+
+  return { game, creator };
+}
+
+async function restoreActiveLfgRooms() {
+  if (!db || !client.isReady()) return;
+
+  const rows = await queryDb(
+    'SELECT vc_id, description FROM voice_chats WHERE status != ? ORDER BY id DESC',
+    ['gone']
+  ).catch(() => []);
+
+  if (!Array.isArray(rows)) return;
+
+  for (const row of rows) {
+    const vcId = String(row.vc_id);
+    let channel = null;
+
+    for (const guild of client.guilds.cache.values()) {
+      channel = await guild.channels.fetch(vcId).catch(() => null);
+      if (channel) break;
+    }
+
+    if (!channel || channel.type !== ChannelType.GuildVoice) {
+      await markVoiceChatGone(vcId).catch(() => {});
+      continue;
+    }
+
+    tempVoiceChannels.add(channel.id);
+
+    const { game, creator } = parseLfgVoiceChannelName(channel.name);
+    activeLfgRooms.set(channel.id, {
+      id: channel.id,
+      game,
+      creator,
+      description: row.description || 'No description',
+      createdAt: channel.createdTimestamp || Date.now(),
+    });
+  }
+}
+
 if (db) {
   db.on('error', (error) => {
     console.error('MySQL connection error:', error.message);
@@ -271,9 +329,10 @@ fastify.listen({ port: LFG_STREAM_PORT, host: '0.0.0.0' })
     console.error('Failed to start LFG stream overlay server:', error);
   });
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  postLfgEmbed();
+  await restoreActiveLfgRooms();
+  await postLfgEmbed();
 });
 
 client.on('interactionCreate', async (interaction) => {
