@@ -401,7 +401,7 @@ async function handleRoleButton(interaction) {
   }
 
   if (interaction.member.roles.cache.has(LFG_ROLE_ID)) {
-    await interaction.editReply({ content: `You already have the <@&${role.id}> role.` });
+    await interaction.editReply({ content: `คุณมียศ (Role) <@&${role.id}> อยู่แล้ว โปรดกดปุ่ม "ยกเลิก Role LFG" หากคุณต้องการยกเลิก` });
     return;
   }
 
