@@ -1,4 +1,5 @@
 require('dotenv').config();
+const mysql = require('mysql');
 const fastify = require('fastify')({ logger: false });
 const {
   Client,
@@ -28,6 +29,62 @@ const LFG_STREAM_PORT = Number(process.env.LFG_STREAM_PORT || 3000);
 const tempVoiceChannels = new Set();
 const voiceRoomAnnouncementMessages = new Map();
 const activeLfgRooms = new Map();
+
+const db = process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER
+  ? mysql.createConnection({
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT || 3306),
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME,
+      charset: 'utf8mb4',
+    })
+  : null;
+
+function queryDb(sql, params = []) {
+  if (!db) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    db.query(sql, params, (error, results) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(results);
+    });
+  });
+}
+
+async function insertVoiceChatRecord(vcId, description) {
+  if (!db) return;
+
+  await queryDb(
+    'INSERT INTO voice_chats (vc_id, description, status) VALUES (?, ?, ?)',
+    [String(vcId), description || null, 'created']
+  );
+}
+
+async function markVoiceChatGone(vcId) {
+  if (!db) return;
+
+  await queryDb(
+    'UPDATE voice_chats SET status = ? WHERE vc_id = ? AND status != ?',
+    ['gone', String(vcId), 'gone']
+  );
+}
+
+if (db) {
+  db.on('error', (error) => {
+    console.error('MySQL connection error:', error.message);
+  });
+
+  db.connect((connectError) => {
+    if (connectError) {
+      console.error('Failed to connect to MySQL:', connectError.message);
+    }
+  });
+}
 
 function getLiveLfgPlayers() {
   return Array.from(activeLfgRooms.values())
@@ -453,6 +510,8 @@ async function handleCreateVoiceModalSubmit(interaction) {
     createdAt: Date.now(),
   });
 
+  await insertVoiceChatRecord(voiceChannel.id, description || null);
+
   if (member.voice.channel) {
     await member.voice.setChannel(voiceChannel).catch(() => {});
   }
@@ -507,6 +566,7 @@ client.on('voiceStateUpdate', async (oldState) => {
   if (channel.members.size === 0) {
     tempVoiceChannels.delete(channel.id);
     activeLfgRooms.delete(channel.id);
+    await markVoiceChatGone(channel.id);
     await deleteVoiceRoomAnnouncement(channel.id);
     await channel.delete('LFG voice room empty').catch(() => {});
   }
@@ -518,6 +578,7 @@ client.on('channelDelete', async (channel) => {
 
   tempVoiceChannels.delete(channel.id);
   activeLfgRooms.delete(channel.id);
+  await markVoiceChatGone(channel.id);
   await deleteVoiceRoomAnnouncement(channel.id);
 });
 
