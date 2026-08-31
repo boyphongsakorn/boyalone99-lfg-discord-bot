@@ -95,6 +95,26 @@ function parseLfgVoiceChannelName(channelName) {
   return { game, creator };
 }
 
+async function findVoiceRoomAnnouncementMessage(channelId) {
+  const lfgChannel = await client.channels.fetch(LFG_CHANNEL_ID).catch(() => null);
+  if (!lfgChannel || lfgChannel.type !== ChannelType.GuildText) return null;
+
+  const messages = await lfgChannel.messages.fetch({ limit: 100 }).catch(() => new Map());
+  const announcementMessage = [...messages.values()].find((message) => {
+    if (message.author.id !== client.user.id) return false;
+
+    if (message.content && message.content.includes(`<#${channelId}>`)) return true;
+
+    return message.embeds.some((embed) =>
+      embed.fields?.some(
+        (field) => field.name === 'ชื่อห้องเสียง' && field.value.includes(String(channelId))
+      )
+    );
+  });
+
+  return announcementMessage ? announcementMessage.id : null;
+}
+
 async function restoreActiveLfgRooms() {
   if (!db || !client.isReady()) return;
 
@@ -129,6 +149,11 @@ async function restoreActiveLfgRooms() {
       description: row.description || 'No description',
       createdAt: channel.createdTimestamp || Date.now(),
     });
+
+    const announcementMessageId = await findVoiceRoomAnnouncementMessage(channel.id);
+    if (announcementMessageId) {
+      voiceRoomAnnouncementMessages.set(channel.id, announcementMessageId);
+    }
   }
 }
 
