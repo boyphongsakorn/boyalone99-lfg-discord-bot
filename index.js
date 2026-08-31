@@ -180,6 +180,54 @@ function getLiveLfgPlayers() {
     }));
 }
 
+async function getLiveLfgPlayersFromDb() {
+  if (!db) return getLiveLfgPlayers();
+
+  const rows = await queryDb(
+    'SELECT vc_id, description FROM voice_chats WHERE status != ? ORDER BY id DESC',
+    ['gone']
+  ).catch(() => []);
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return getLiveLfgPlayers();
+  }
+
+  const resolvedRooms = [];
+
+  for (const row of rows) {
+    const vcId = String(row.vc_id);
+    let channel = null;
+
+    for (const guild of client.guilds.cache.values()) {
+      channel = await guild.channels.fetch(vcId).catch(() => null);
+      if (channel) break;
+    }
+
+    if (!channel || channel.type !== ChannelType.GuildVoice) {
+      await markVoiceChatGone(vcId).catch(() => {});
+      continue;
+    }
+
+    const { game, creator } = parseLfgVoiceChannelName(channel.name);
+    resolvedRooms.push({
+      id: channel.id,
+      game,
+      creator,
+      description: row.description || 'No description',
+      createdAt: channel.createdTimestamp || Date.now(),
+    });
+  }
+
+  return resolvedRooms
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((room) => ({
+      name: room.creator,
+      game: room.game,
+      note: room.description || 'No description',
+      status: 'มองหาคนเล่นด้วย',
+    }));
+}
+
 function renderLfgStreamHtml(players = getLiveLfgPlayers()) {
   const cards = players
     .map(
@@ -200,6 +248,7 @@ function renderLfgStreamHtml(players = getLiveLfgPlayers()) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="refresh" content="15" />
     <title>LFG Stream Overlay</title>
     <style>
       :root {
@@ -340,7 +389,7 @@ fastify.get('/stream/lfg', async (request, reply) => {
     ? rawPlayers.map((player) => JSON.parse(player))
     : rawPlayers
       ? [JSON.parse(rawPlayers)]
-      : getLiveLfgPlayers();
+      : await getLiveLfgPlayersFromDb();
 
   reply.type('text/html');
   return renderLfgStreamHtml(players);
