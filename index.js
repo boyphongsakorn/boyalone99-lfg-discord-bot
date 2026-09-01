@@ -236,10 +236,10 @@ function renderLfgStreamHtml(players = getLiveLfgPlayers()) {
         <div class="player-box">
           <div class="game-tag">${player.game}</div>
           <div class="player-header">
-            <span class="name">${player.name}</span>
+            <span class="name">${player.note}</span>
             <span class="status">${player.status}</span>
           </div>
-          <div class="note">${player.note}</div>
+          <div class="note">${player.name}</div>
         </div>`
     )
     .join('');
