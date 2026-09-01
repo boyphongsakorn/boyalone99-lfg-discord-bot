@@ -26,6 +26,7 @@ const client = new Client({
 const LFG_CHANNEL_ID = process.env.LFG_POST_CHANNEL_ID || '1543200807334322176';
 const LFG_ROLE_ID = process.env.LFG_ROLE_ID || '1543368029063217193';
 const LFG_STREAM_PORT = Number(process.env.LFG_STREAM_PORT || 3000);
+const LFG_ACTION_WEBHOOK_URL = process.env.LFG_ACTION_WEBHOOK_URL || 'http://192.168.31.141:7474/DoAction';
 const tempVoiceChannels = new Set();
 const voiceRoomAnnouncementMessages = new Map();
 const activeLfgRooms = new Map();
@@ -609,6 +610,24 @@ async function getLfgMentionPayload(guild) {
   };
 }
 
+async function notifyLfgActionWebhook() {
+  try {
+    await fetch(LFG_ACTION_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: {
+          name: 'LFG',
+        },
+      }),
+    });
+  } catch (error) {
+    console.error('Failed to notify LFG action webhook:', error.message);
+  }
+}
+
 async function handleCreateVoiceModalSubmit(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
@@ -644,6 +663,7 @@ async function handleCreateVoiceModalSubmit(interaction) {
   });
 
   await insertVoiceChatRecord(voiceChannel.id, description || null);
+  await notifyLfgActionWebhook();
 
   if (member.voice.channel) {
     await member.voice.setChannel(voiceChannel).catch(() => {});
