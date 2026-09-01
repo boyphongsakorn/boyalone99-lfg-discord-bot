@@ -610,6 +610,45 @@ async function getLfgMentionPayload(guild) {
   };
 }
 
+async function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchLfgChannelWithRetry() {
+  let attempt = 0;
+
+  while (true) {
+    attempt += 1;
+
+    const lfgChannel = await client.channels.fetch(LFG_CHANNEL_ID).catch(() => null);
+    if (lfgChannel && lfgChannel.type === ChannelType.GuildText) {
+      return lfgChannel;
+    }
+
+    console.error(`Could not find text channel ${LFG_CHANNEL_ID} (attempt ${attempt}). Retrying...`);
+    await wait(2000);
+  }
+}
+
+async function sendAnnouncementWithRetry(lfgChannel, payload) {
+  let attempt = 0;
+
+  while (true) {
+    attempt += 1;
+
+    try {
+      const lfgMessage = await lfgChannel.send(payload);
+      if (lfgMessage) {
+        return lfgMessage;
+      }
+    } catch (error) {
+      console.error(`Failed to send LFG announcement (attempt ${attempt}):`, error.message);
+    }
+
+    await wait(2000);
+  }
+}
+
 async function notifyLfgActionWebhook() {
   try {
     await fetch(LFG_ACTION_WEBHOOK_URL, {
@@ -669,30 +708,27 @@ async function handleCreateVoiceModalSubmit(interaction) {
     await member.voice.setChannel(voiceChannel).catch(() => {});
   }
 
-  // Post an embed in the LFG channel with the description
-  const lfgChannel = await client.channels.fetch(LFG_CHANNEL_ID).catch(() => null);
-  if (lfgChannel && lfgChannel.type === ChannelType.GuildText) {
-    const embed = new EmbedBuilder()
-      .setTitle(`สร้างห้องเสียง ${gameName} เรียบร้อยแล้ว`)
-      .setDescription(description || 'ไม่มีคำอธิบาย')
-      .addFields(
-        { name: 'ชื่อห้องเสียง', value: `<#${voiceChannel.id}>`, inline: true },
-        { name: 'สร้างโดย', value: `<@${interaction.user.id}>`, inline: true }
-      )
-      .setTimestamp();
+  // Post an embed in the LFG channel with the description.
+  // Do not report success until the announcement message is actually sent.
+  const lfgChannel = await fetchLfgChannelWithRetry();
+  const embed = new EmbedBuilder()
+    .setTitle(`สร้างห้องเสียง ${gameName} เรียบร้อยแล้ว`)
+    .setDescription(description || 'ไม่มีคำอธิบาย')
+    .addFields(
+      { name: 'ชื่อห้องเสียง', value: `<#${voiceChannel.id}>`, inline: true },
+      { name: 'สร้างโดย', value: `<@${interaction.user.id}>`, inline: true }
+    )
+    .setTimestamp();
 
-    const mentionPayload = await getLfgMentionPayload(guild);
+  const mentionPayload = await getLfgMentionPayload(guild);
+  const announcementPayload = {
+    content: mentionPayload.content,
+    embeds: [embed],
+    allowedMentions: mentionPayload.allowedMentions,
+  };
 
-    const lfgMessage = await lfgChannel.send({
-      content: mentionPayload.content,
-      embeds: [embed],
-      allowedMentions: mentionPayload.allowedMentions,
-    }).catch(() => null);
-
-    if (lfgMessage) {
-      voiceRoomAnnouncementMessages.set(voiceChannel.id, lfgMessage.id);
-    }
-  }
+  const lfgMessage = await sendAnnouncementWithRetry(lfgChannel, announcementPayload);
+  voiceRoomAnnouncementMessages.set(voiceChannel.id, lfgMessage.id);
 
   await interaction.editReply({
     content: `สร้าง <#${voiceChannel.id}> สำหรับ ${gameName} เรียบร้อยแล้ว. บันทึกคำอธิบายเรียบร้อยแล้ว: ${description || 'ไม่มีคำอธิบาย'}`,
