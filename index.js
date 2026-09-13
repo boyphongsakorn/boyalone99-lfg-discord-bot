@@ -518,7 +518,7 @@ async function postLfgEmbed() {
     components: [row],
     allowedMentions: { roles: [LFG_ROLE_ID] },
   });
-  await channel.send('ห้องนี้ไม่สามารถส่งข้อความได้ โปรดไปที่ #1461813547544739862');
+  await channel.send('ห้องนี้ไม่สามารถส่งข้อความได้ โปรดไปที่ <#1461813547544739862>');
 }
 
 async function handleRoleButton(interaction) {
