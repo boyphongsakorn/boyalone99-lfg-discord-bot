@@ -407,6 +407,7 @@ fastify.listen({ port: LFG_STREAM_PORT, host: '0.0.0.0' })
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
+  client.user.setActivity('กำลังมองหาเพื่อนเล่นเกมด้วย', { type: 0 });
   await restoreActiveLfgRooms();
   await postLfgEmbed();
 });
