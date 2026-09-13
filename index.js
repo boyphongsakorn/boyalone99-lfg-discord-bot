@@ -518,6 +518,7 @@ async function postLfgEmbed() {
     components: [row],
     allowedMentions: { roles: [LFG_ROLE_ID] },
   });
+  await channel.send('ห้องนี้ไม่สามารถส่งข้อความได้ โปรดไปที่ #1461813547544739862');
 }
 
 async function handleRoleButton(interaction) {
@@ -704,7 +705,7 @@ async function handleCreateVoiceModalSubmit(interaction) {
   await insertVoiceChatRecord(voiceChannel.id, description || null);
   await notifyLfgActionWebhook();
 
-  if (member.voice.channel) {
+  if (member.voice.channel && member.voice.channel.members.size <= 1) {
     await member.voice.setChannel(voiceChannel).catch(() => {});
   }
 
