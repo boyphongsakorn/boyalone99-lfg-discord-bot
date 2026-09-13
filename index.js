@@ -25,6 +25,7 @@ const client = new Client({
 
 const LFG_CHANNEL_ID = process.env.LFG_POST_CHANNEL_ID || '1543200807334322176';
 const LFG_ROLE_ID = process.env.LFG_ROLE_ID || '1543368029063217193';
+const LFG_TEXT_NOTICE = 'ห้องนี้ไม่สามารถส่งข้อความได้';
 const LFG_STREAM_PORT = Number(process.env.LFG_STREAM_PORT || 3000);
 const LFG_ACTION_WEBHOOK_URL = process.env.LFG_ACTION_WEBHOOK_URL || 'http://192.168.31.141:7474/DoAction';
 const tempVoiceChannels = new Set();
@@ -459,8 +460,9 @@ async function deleteOldLfgEmbeds(channel) {
           component.customId === 'lfg-remove-role'
       )
     );
+    const isLfgTextNotice = message.content.startsWith(LFG_TEXT_NOTICE);
 
-    return hasLfgEmbed || hasLfgButtons;
+    return hasLfgEmbed || hasLfgButtons || isLfgTextNotice;
   });
 
   await Promise.all(oldMessages.map((message) => message.delete().catch(() => {})));
@@ -518,7 +520,7 @@ async function postLfgEmbed() {
     components: [row],
     allowedMentions: { roles: [LFG_ROLE_ID] },
   });
-  await channel.send('ห้องนี้ไม่สามารถส่งข้อความได้ โปรดไปที่ <#1461813547544739862>');
+  await channel.send(`${LFG_TEXT_NOTICE} โปรดไปที่ <#1461813547544739862>`);
 }
 
 async function handleRoleButton(interaction) {
