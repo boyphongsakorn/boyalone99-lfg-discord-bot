@@ -27,6 +27,7 @@ const LFG_CHANNEL_ID = process.env.LFG_POST_CHANNEL_ID || '1543200807334322176';
 const LFG_ROLE_ID = process.env.LFG_ROLE_ID || '1543368029063217193';
 const LFG_TEXT_NOTICE = 'ห้องนี้ไม่สามารถส่งข้อความได้';
 const LFG_STREAM_PORT = Number(process.env.LFG_STREAM_PORT || 3000);
+const LFG_STREAM_CATEGORY_ID = '1461814699766317301';
 const LFG_ACTION_WEBHOOK_URL = process.env.LFG_ACTION_WEBHOOK_URL || 'http://192.168.31.141:7474/DoAction';
 const tempVoiceChannels = new Set();
 const voiceRoomAnnouncementMessages = new Map();
@@ -149,6 +150,8 @@ async function restoreActiveLfgRooms() {
       game,
       creator,
       description: row.description || 'No description',
+      categoryId: channel.parentId,
+      memberCount: channel.members.size,
       createdAt: channel.createdTimestamp || Date.now(),
     });
 
@@ -175,15 +178,58 @@ function getLiveLfgPlayers() {
   return Array.from(activeLfgRooms.values())
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((room) => ({
+      id: room.id,
       name: room.creator,
       game: room.game,
       note: room.description || 'No description',
       status: 'มองหาคนเล่นด้วย',
+      createdAt: room.createdAt,
     }));
 }
 
+function mergeVoicePlayers(...playerGroups) {
+  return Array.from(
+    new Map(
+      playerGroups
+        .flat()
+        .map((player) => [player.id, player])
+    ).values()
+  ).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function getCategoryVoicePlayers() {
+  const players = [];
+
+  for (const guild of client.guilds.cache.values()) {
+    for (const channel of guild.channels.cache.values()) {
+      if (
+        channel.type !== ChannelType.GuildVoice ||
+        channel.parentId !== LFG_STREAM_CATEGORY_ID ||
+        channel.members.size >= 6
+      ) {
+        continue;
+      }
+
+      const { game, creator } = parseLfgVoiceChannelName(channel.name);
+      players.push({
+        id: channel.id,
+        name: creator,
+        game,
+        note: 'No description',
+        status: 'มองหาคนเล่นด้วย',
+        createdAt: channel.createdTimestamp || Date.now(),
+      });
+    }
+  }
+
+  return players;
+}
+
 async function getLiveLfgPlayersFromDb() {
-  if (!db) return getLiveLfgPlayers();
+  const categoryPlayers = getCategoryVoicePlayers();
+  if (!db) {
+    return mergeVoicePlayers(getLiveLfgPlayers(), categoryPlayers);
+  }
 
   const rows = await queryDb(
     'SELECT vc_id, description FROM voice_chats WHERE status != ? ORDER BY id DESC',
@@ -191,7 +237,7 @@ async function getLiveLfgPlayersFromDb() {
   ).catch(() => []);
 
   if (!Array.isArray(rows) || rows.length === 0) {
-    return getLiveLfgPlayers();
+    return mergeVoicePlayers(getLiveLfgPlayers(), categoryPlayers);
   }
 
   const resolvedRooms = [];
@@ -211,18 +257,25 @@ async function getLiveLfgPlayersFromDb() {
     }
 
     const { game, creator } = parseLfgVoiceChannelName(channel.name);
+    if (channel.parentId === LFG_STREAM_CATEGORY_ID && channel.members.size >= 6) {
+      continue;
+    }
+
     resolvedRooms.push({
       id: channel.id,
       game,
       creator,
       description: row.description || 'No description',
+      categoryId: channel.parentId,
+      memberCount: channel.members.size,
       createdAt: channel.createdTimestamp || Date.now(),
     });
   }
 
-  return resolvedRooms
+  return mergeVoicePlayers(resolvedRooms, categoryPlayers)
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((room) => ({
+      id: room.id,
       name: room.creator,
       game: room.game,
       note: room.description || 'No description',
@@ -702,6 +755,8 @@ async function handleCreateVoiceModalSubmit(interaction) {
     game: gameName,
     creator: displayName,
     description: description || 'No description',
+    categoryId: voiceChannel.parentId,
+    memberCount: voiceChannel.members.size,
     createdAt: Date.now(),
   });
 
@@ -751,7 +806,13 @@ async function deleteVoiceRoomAnnouncement(channelId) {
   voiceRoomAnnouncementMessages.delete(channelId);
 }
 
-client.on('voiceStateUpdate', async (oldState) => {
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  for (const channel of [oldState.channel, newState.channel]) {
+    if (channel && activeLfgRooms.has(channel.id)) {
+      activeLfgRooms.get(channel.id).memberCount = channel.members.size;
+    }
+  }
+
   const channel = oldState.channel;
   if (!channel) return;
   if (!tempVoiceChannels.has(channel.id)) return;
