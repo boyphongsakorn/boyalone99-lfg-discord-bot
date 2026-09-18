@@ -210,12 +210,11 @@ function getCategoryVoicePlayers() {
         continue;
       }
 
-      const { game, creator } = parseLfgVoiceChannelName(channel.name);
       players.push({
         id: channel.id,
-        name: creator,
-        game,
-        note: 'No description',
+        name: 'มองหาคนเล่นด้วย',
+        game: '',
+        note: channel.name,
         status: 'มองหาคนเล่นด้วย',
         createdAt: channel.createdTimestamp || Date.now(),
       });
@@ -256,16 +255,17 @@ async function getLiveLfgPlayersFromDb() {
       continue;
     }
 
-    const { game, creator } = parseLfgVoiceChannelName(channel.name);
     if (channel.parentId === LFG_STREAM_CATEGORY_ID && channel.members.size >= 6) {
       continue;
     }
 
     resolvedRooms.push({
       id: channel.id,
-      game,
-      creator,
-      description: row.description || 'No description',
+      game: channel.parentId === LFG_STREAM_CATEGORY_ID ? '' : parseLfgVoiceChannelName(channel.name).game,
+      creator: channel.parentId === LFG_STREAM_CATEGORY_ID
+        ? 'มองหาคนเล่นด้วย'
+        : parseLfgVoiceChannelName(channel.name).creator,
+      description: channel.parentId === LFG_STREAM_CATEGORY_ID ? channel.name : row.description || 'No description',
       categoryId: channel.parentId,
       memberCount: channel.members.size,
       createdAt: channel.createdTimestamp || Date.now(),
@@ -288,7 +288,7 @@ function renderLfgStreamHtml(players = getLiveLfgPlayers()) {
     .map(
       (player) => `
         <div class="player-box">
-          <div class="game-tag">${player.game}</div>
+          ${player.game ? `<div class="game-tag">${player.game}</div>` : ''}
           <div class="player-header">
             <span class="name">${player.note}</span>
             <span class="status">${player.status}</span>
