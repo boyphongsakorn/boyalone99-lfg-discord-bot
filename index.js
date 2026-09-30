@@ -34,7 +34,7 @@ const voiceRoomAnnouncementMessages = new Map();
 const activeLfgRooms = new Map();
 
 const db = process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER
-  ? mysql.createConnection({
+  ? mysql.createPool({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT || 3306),
       user: process.env.DB_USER,
@@ -163,14 +163,10 @@ async function restoreActiveLfgRooms() {
 }
 
 if (db) {
-  db.on('error', (error) => {
-    console.error('MySQL connection error:', error.message);
-  });
-
-  db.connect((connectError) => {
-    if (connectError) {
-      console.error('Failed to connect to MySQL:', connectError.message);
-    }
+  db.on('connection', (connection) => {
+    connection.on('error', (error) => {
+      console.error('MySQL connection error:', error.message);
+    });
   });
 }
 
